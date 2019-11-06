@@ -1,0 +1,94 @@
+---
+title: "October in Coffee"
+author: "Raven McKnight"
+date: "11/3/2019"
+output: 
+  html_document:
+    theme: paper
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+packages <- c('data.table', 'ggplot2', 'tidyverse', 'lubridate',
+              'showtext')
+
+miss_pkgs <- packages[!packages %in% installed.packages()[,1]]
+
+if(length(miss_pkgs) > 0){
+  install.packages(miss_pkgs)
+}
+
+invisible(lapply(packages, library, character.only = TRUE))
+
+rm(miss_pkgs, packages)
+
+font_add_google(name = "Lato")
+font_add_google(name = "Libre Baskerville")
+```
+
+# The Data
+Data is exported from the Tally app. 
+
+```{r}
+tally <- read_csv("tally_oct_2019.csv")
+setDT(tally)
+head(tally)
+
+tally[, MONTH := month(DATE)]
+tally <- tally[MONTH == 10]
+tally[, WEEKEND := FALSE]
+tally[DAY == "SAT" | DAY == "SUN", WEEKEND := TRUE]
+
+dim(tally)
+
+tally[, ID := seq(1:nrow(tally))]
+setkey(tally, ID)
+
+# mark first observation of the day
+first <- tally %>%
+  mutate(FIRST = 0) %>%
+  group_by(DATE) %>%
+  arrange(TIME) %>%
+  slice(1) %>%
+  mutate(FIRST = 1)
+setDT(first)
+
+tally <- first[, c("ID", "FIRST")][tally, on = "ID"]
+tally[is.na(FIRST), FIRST := 0]
+```
+
+
+```{r}
+coffee <- ggplot(tally, aes(x=DATE, y = TIME, color = as.factor(FIRST))) +
+  scale_y_reverse() +
+  geom_line(data = (tally %>% filter(FIRST == 1)), alpha = 0.5) +
+  geom_hline(yintercept = hms("05:30:00"), linetype = "dotdash", color = "#D0C9AC") +  # "daily" alarm
+  geom_point(size = 4, shape = 21, fill = "#926144", stroke = 1.5) + 
+  theme_minimal() + 
+  scale_color_manual(values = c("#335160", "#C35F3F")) +
+  theme(panel.grid.major.y = element_blank(), 
+        panel.grid.minor.y = element_line(color = "#D0C9AC"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "none", 
+        plot.title = element_text(family = "Baskerville", size = 28),
+        plot.subtitle = element_text(family = "Baskerville", size = 14),
+        axis.title = element_text(size = 12), 
+        panel.background = element_rect(fill = "#FDF5D2", color = "#FDF5D2"),
+        plot.background = element_rect(fill = "#FDF5D2", color = "#FDF5D2"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text = element_text(family = "Lato"),
+        axis.line = element_line(color = "#D0C9AC")) +
+  labs(title = "Coffee, coffee, coffee!", 
+       subtitle = " In which I grew up to be Lorelai Gilmore") 
+
+ggsave(coffee, filename = "coffee_ggplot.pdf", device = cairo_pdf, 
+       width = 9, height = 6, units = "in")
+
+coffee
+```
+
+Now, take the plot to Illustrator!
